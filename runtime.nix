@@ -4,6 +4,7 @@
   autoPatchelfHook,
   patchelf,
   zlib,
+  fontconfig,
   engine,
   gtk3,
   clang,
@@ -23,6 +24,7 @@ stdenv.mkDerivation {
   buildInputs = [
     stdenv.cc.cc.lib
     zlib
+    fontconfig
   ];
   # Enforce separation, including accidental references left in the ELF RPATH.
   disallowedRequisites = [

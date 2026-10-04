@@ -22,4 +22,5 @@ in
     aot
     ;
   rawEngine = engine;
+  dynamicLinker = pkgs.stdenv.cc.bintools.dynamicLinker;
 }

@@ -34,8 +34,9 @@ The engine retains matching Dart, frontend-server snapshot, product kernel,
 `gen_snapshot`, sky packages, GTK Linux embedding and headers, Impeller compiler,
 shader library, font subset and const-finder tooling. The current Flutter
 `build linux` pipeline needs GTK even for a custom embedder. The source-supported
-snapshot group is retained; only the explicit tessellator shared target is
-removed. This is not a runtime-only engine build.
+snapshot group is retained. The explicit tessellator shared target and the
+unused GLFW embedding/header targets are excluded. This is not a runtime-only
+engine build.
 
 Use `--local-engine-src-path=${engine}`, `--local-engine=host_release`, and
 `--local-engine-host=host_release` with a matching Flutter SDK. SDK provisioning,
@@ -64,7 +65,8 @@ bash check-engine.sh "$(nix-build default.nix -A engine --no-out-link)"
 ```
 
 The diagnostic script checks required artifacts, executability and shared
-library resolution. The synthetic AOT check loads and collects AOT data; it
+library resolution using Nix's loader, not the runner's host `ldd`. The synthetic
+AOT check loads and collects AOT data; it
 does not start the Flutter engine, render a frame, or exercise a real application.
 
 ## Releases And Trust

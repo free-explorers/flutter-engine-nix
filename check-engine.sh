@@ -20,8 +20,12 @@ test -s "$output/shader_lib/flutter/runtime_effect.glsl"
 test -s "$output/gen/dart-pkg/sky_engine/pubspec.yaml"
 "$output/gen_snapshot" --version
 "$output/dart-sdk/bin/dart" --version
-for library in libflutter_engine.so libflutter_linux_gtk.so; do
-  dependencies=$(ldd "$output/$library")
+# Host ldd uses Ubuntu's loader for shared libraries without PT_INTERP.
+# Use the same Nix loader as the patched tools and production runtime.
+loader=$(nix-instantiate --eval --strict --json default.nix -A dynamicLinker | jq -r .)
+for binary in libflutter_engine.so libflutter_linux_gtk.so gen_snapshot \
+  dart-sdk/bin/dart dart-sdk/bin/dartaotruntime impellerc font-subset; do
+  dependencies=$("$loader" --list "$output/$binary")
   echo "$dependencies"
   [[ $dependencies != *'not found'* ]]
 done
