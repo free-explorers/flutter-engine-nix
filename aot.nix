@@ -19,7 +19,7 @@ let
     #include <stdio.h>
     #include "flutter_embedder.h"
     int main(int argc, char **argv) {
-      if (argc != 2 || !FlutterEngineRunsAOTCompiledDart()) return 1;
+      if (argc != 2 || !FlutterEngineRunsAOTCompiledDartCode()) return 1;
       FlutterEngineAOTDataSource source = {
         .type = kFlutterEngineAOTDataSourceTypeElfPath,
         .elf_path = argv[1],
