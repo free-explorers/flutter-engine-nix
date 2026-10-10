@@ -1,5 +1,10 @@
 name: Source Engine Release
 
+# Builds the source engine and publishes its closure to the project Cachix
+# cache. Substituting from the cache is what lets Veshell (and its release
+# workflow) avoid compiling the engine. No release assets are produced; the
+# cache is the distribution channel.
+
 on:
   workflow_dispatch:
 
@@ -15,12 +20,6 @@ jobs:
     if: github.repository == 'free-explorers/flutter-engine-nix' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 330
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    env:
-      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout trusted source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -39,7 +38,7 @@ jobs:
           available=$(df --output=avail -B1 / | tr -dc '0-9')
           (( available >= 30 * 1024 * 1024 * 1024 ))
 
-      - name: Install Nix without a paid cache
+      - name: Install Nix
         uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
         with:
           extra_nix_config: |
@@ -47,85 +46,38 @@ jobs:
             cores = 4
             experimental-features = nix-command flakes
 
-      - name: Predict outputs and deterministic runtime tag
-        id: identity
-        shell: bash
-        run: |
-          set -euo pipefail
-          engine=$(nix-instantiate --eval --strict --json default.nix -A engine.outPath | jq -r .)
-          runtime=$(nix-instantiate --eval --strict --json default.nix -A runtime.outPath | jq -r .)
-          revision=$(nix-instantiate --eval --strict --json default.nix -A nixpkgsRevision | jq -r .)
-          hash=${runtime#/nix/store/}
-          hash=${hash%%-*}
-          [[ $hash =~ ^[0-9a-z]{32}$ ]]
-          echo "tag=nix-engine-$hash" >> "$GITHUB_OUTPUT"
-          {
-            echo "ENGINE_OUTPUT=$engine"
-            echo "RAW_ENGINE_OUTPUT=$engine"
-            echo "RUNTIME_OUTPUT=$runtime"
-            echo "NIXPKGS_REVISION=$revision"
-          } >> "$GITHUB_ENV"
+      - name: Use the project cache
+        uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: veshell
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - name: Restore an existing attested release or require a new tag
-        id: restore
-        env:
-          RELEASE_TAG: ${{ steps.identity.outputs.tag }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if gh api "repos/free-explorers/flutter-engine-nix/releases/tags/$RELEASE_TAG" \
-            > "$RUNNER_TEMP/release.json" 2> "$RUNNER_TEMP/release-error"; then
-            commit=$(jq -er '.target_commitish | select(test("^[0-9a-f]{40}$"))' "$RUNNER_TEMP/release.json")
-            EXPECTED_ENGINE_OUTPUT="$ENGINE_OUTPUT" EXPECTED_RAW_ENGINE_OUTPUT="$RAW_ENGINE_OUTPUT" \
-              EXPECTED_RUNTIME_OUTPUT="$RUNTIME_OUTPUT" \
-              bash import-release.sh "$commit" "$RELEASE_TAG" engine refs/heads/main --trust-github-release
-            bash check-engine.sh "$ENGINE_OUTPUT"
-            echo 'restored=true' >> "$GITHUB_OUTPUT"
-          else
-            error=$(< "$RUNNER_TEMP/release-error")
-            [[ $error == *'HTTP 404'* ]] || { echo "$error" >&2; exit 1; }
-            echo 'restored=false' >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Build and diagnose source engine (240 minute bound)
-        if: steps.restore.outputs.restored != 'true'
+      - name: Build and diagnose the source engine (240 minute bound)
         env:
           ENGINE_BUILD_TIMEOUT: 240m
         shell: bash
         run: bash build-engine.sh
 
-      - name: Build independent runtime and require synthetic AOT check
+      - name: Build the independent runtime and run the synthetic AOT check
         timeout-minutes: 20
         shell: bash
         run: |
           set -euo pipefail
-          runtime=$(nix-build default.nix -A runtime --no-out-link --max-jobs 1 --cores 4)
-          [[ $runtime == "$RUNTIME_OUTPUT" ]]
+          nix-build default.nix -A runtime --no-out-link --max-jobs 1 --cores 4
           timeout --signal=INT --kill-after=60s 15m \
             nix-build default.nix -A aot --no-out-link --max-jobs 1 --cores 4
           echo 'Synthetic AOT compile/load passed; no full application integration or rendering test claimed.' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Export engine and runtime closure
-        if: steps.restore.outputs.restored != 'true'
-        shell: bash
-        run: bash export-release.sh engine "$RUNNER_TEMP/engine-release" "$ENGINE_OUTPUT" "$RUNTIME_OUTPUT"
-
-      - name: Attest checksum manifest
-        if: steps.restore.outputs.restored != 'true'
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
-        with:
-          subject-path: ${{ runner.temp }}/engine-release/engine-SHA256SUMS
-
-      - name: Publish immutable prerelease
-        if: steps.restore.outputs.restored != 'true'
-        env:
-          RELEASE_TAG: ${{ steps.identity.outputs.tag }}
+      - name: Publish the engine, runtime and AOT check to the cache
         shell: bash
         run: |
-          gh release create "$RELEASE_TAG" "$RUNNER_TEMP/engine-release/"* \
-            --repo free-explorers/flutter-engine-nix --target "$GITHUB_SHA" \
-            --prerelease --latest=false --title "$RELEASE_TAG" \
-            --notes 'Attested native x86_64-linux source engine tooling and independent embedder runtime. Synthetic AOT compile/load passed. No application integration or rendering tests claimed. Root import requires explicit trust of the source commit and main-branch release workflow.'
+          set -euo pipefail
+          mapfile -t roots < <(
+            nix-build default.nix -A engine -A runtime -A aot \
+              --no-out-link --max-jobs 1 --cores 4
+          )
+          printf '%s\n' "${roots[@]}"
+          cachix push veshell "${roots[@]}"
 
       - name: Final resource sample
         if: always()
