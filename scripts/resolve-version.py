@@ -150,32 +150,51 @@ def nix_build_engine(version: str) -> subprocess.CompletedProcess:
     )
 
 
-def mismatched_hash(result: subprocess.CompletedProcess, matcher: str | None) -> str | None:
-    for block in re.finditer(
-        r"hash mismatch in fixed-output derivation '([^']+)':(.{0,600}?)got:\s+(sha256-[A-Za-z0-9+/=]+)",
-        (result.stderr or "") + (result.stdout or ""),
-        re.S,
-    ):
-        if matcher is None or matcher in block.group(1):
-            return block.group(3)
-    return None
+def fixed_output_mismatches(result: subprocess.CompletedProcess) -> list[tuple[str, str]]:
+    return [
+        (block.group(1), block.group(3))
+        for block in re.finditer(
+            r"hash mismatch in fixed-output derivation '([^']+)':(.{0,600}?)got:\s+(sha256-[A-Za-z0-9+/=]+)",
+            (result.stderr or "") + (result.stdout or ""),
+            re.S,
+        )
+    ]
 
 
-def probe(version: str, label: str, filename: str, path: list[str], matcher: str | None) -> None:
-    for _ in range(3):
-        document = load_document(filename)
-        if dig(document, [version] + path) != FAKE:
-            print(f"  {label}: resolved")
+def probe_hashes(version: str) -> None:
+    # The build decides which fixed-output derivation it reaches first -- the
+    # SwiftShader fetch comes before the engine source -- so route every mismatch
+    # by derivation name instead of assuming an order.
+    fields = (
+        ("sourceHashes", "engine-source.json",
+         ["sourceHashes", "x86_64-linux", "x86_64-linux"], "-source-"),
+        ("swiftshaderHash", "engine-source.json", ["swiftshaderHash"], "SwiftShader"),
+    )
+    for _ in range(6):
+        pending = [field for field in fields if dig(load_document(field[1]), [version] + field[2]) == FAKE]
+        if not pending:
+            print("  all fixed-output hashes resolved")
             return
         result = nix_build_engine(version)
-        value = mismatched_hash(result, matcher)
-        if value is None:
-            output = ((result.stderr or "") + (result.stdout or ""))[-2000:]
-            fail(f"{label}: the build reported no usable hash mismatch\n{output}")
-        plant(document, [version] + path, value)
-        write_document(filename, document)
-        print(f"  {label}: {value}")
-    fail(f"{label}: still unresolved after 3 attempts")
+        found = fixed_output_mismatches(result)
+        filled = False
+        for label, filename, path, matcher in pending:
+            value = next((hash_ for name, hash_ in found if matcher in name), None)
+            if value is None:
+                continue
+            document = load_document(filename)
+            plant(document, [version] + path, value)
+            write_document(filename, document)
+            print(f"  {label}: {value}")
+            filled = True
+        if not filled:
+            listed = ", ".join(name.split("/")[-1] for name, _ in found) or "none"
+            output = ((result.stderr or "") + (result.stdout or ""))[-1500:]
+            fail(
+                "no usable hash mismatch for: " + ", ".join(field[0] for field in pending)
+                + f"\nmismatches reported: {listed}\n{output}"
+            )
+    fail("the engine's fixed-output hashes are still unresolved")
 
 
 def prefetch_url(url: str) -> str:
@@ -201,7 +220,7 @@ def main() -> int:
     dart_rev, swiftshader_rev = deps_revisions(engine_version)
     dart_ver = dart_version(version)
 
-    # The two probed hashes start fake; probe() fills them from a real build.
+    # The two probed hashes start fake; probe_hashes() fills them from a real build.
     entry = {
         "engineVersion": engine_version,
         "sourceRev": source_rev,
@@ -241,10 +260,7 @@ def main() -> int:
     print(f"wrote bootstrap-dart.json: {version}")
 
     print("probing the engine's fixed-output hashes")
-    probe(version, "sourceHashes", "engine-source.json",
-          ["sourceHashes", "x86_64-linux", "x86_64-linux"], "-source-")
-    # Only swiftshaderHash is still fake, so any mismatch now is that one.
-    probe(version, "swiftshaderHash", "engine-source.json", ["swiftshaderHash"], None)
+    probe_hashes(version)
     return 0
 
 
