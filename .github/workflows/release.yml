@@ -29,6 +29,10 @@ jobs:
     timeout-minutes: 360
     permissions:
       contents: write
+    env:
+      # Empty means "build the repository default in default.json"; otherwise
+      # every build below honours the version this run was asked for.
+      FLUTTER_VERSION: ${{ inputs.flutter_version }}
     steps:
       - name: Checkout trusted source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -91,17 +95,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          nix-build default.nix -A runtime --no-out-link --max-jobs 1 --cores 4
+          nix_args=()
+          if [[ -n "$FLUTTER_VERSION" ]]; then
+            nix_args+=(--argstr flutterVersion "$FLUTTER_VERSION")
+          fi
+          nix-build default.nix "${nix_args[@]}" -A runtime --no-out-link --max-jobs 1 --cores 4
           timeout --signal=INT --kill-after=60s 15m \
-            nix-build default.nix -A aot --no-out-link --max-jobs 1 --cores 4
+            nix-build default.nix "${nix_args[@]}" -A aot --no-out-link --max-jobs 1 --cores 4
           echo 'Synthetic AOT compile/load passed; no full application integration or rendering test claimed.' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish the engine, runtime and AOT check to the cache
         shell: bash
         run: |
           set -euo pipefail
+          nix_args=()
+          if [[ -n "$FLUTTER_VERSION" ]]; then
+            nix_args+=(--argstr flutterVersion "$FLUTTER_VERSION")
+          fi
           mapfile -t roots < <(
-            nix-build default.nix -A engine -A runtime -A aot \
+            nix-build default.nix "${nix_args[@]}" -A engine -A runtime -A aot \
               --no-out-link --max-jobs 1 --cores 4
           )
           printf '%s\n' "${roots[@]}"
