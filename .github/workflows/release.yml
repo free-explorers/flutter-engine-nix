@@ -133,5 +133,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.VESHELL_DISPATCH_TOKEN }}
         run: |
-          gh api repos/free-explorers/veshell/dispatches -f event_type=flutter-bump >/dev/null
-          echo "dispatched flutter-bump to free-explorers/veshell"
+          # workflow_dispatch, not repository_dispatch: triggering a workflow needs
+          # Actions: write, whereas the dispatches endpoint would need Contents:
+          # write -- code-push rights on the app repository, just to send a signal.
+          gh workflow run complete-flutter-bump.yml --repo free-explorers/veshell --ref main
+          echo "triggered Complete Flutter Bump in free-explorers/veshell"
