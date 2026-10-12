@@ -1,6 +1,8 @@
 {
   flutterVersion ? (builtins.fromJSON (builtins.readFile ./default.json)).flutterVersion,
   system ? builtins.currentSystem,
+  runtimeMode ? "release",
+  isOptimized ? runtimeMode != "debug",
 }:
 let
   nixpkgsRevision = "774debe7a0d1b496e35677ad955a1011c6ff74f3";
@@ -9,7 +11,7 @@ let
     sha256 = "1japvhk1jlgc8sihm9gczwnv6fjanqsr1ji57vx67wbvqj88a34x";
   };
   pkgs = import nixpkgs { inherit system; };
-  engine = pkgs.callPackage ./engine.nix { inherit flutterVersion; };
+  engine = pkgs.callPackage ./engine.nix { inherit flutterVersion runtimeMode isOptimized; };
   runtime = pkgs.callPackage ./runtime.nix { inherit engine; };
   aot = pkgs.callPackage ./aot.nix { inherit engine runtime; };
 in
