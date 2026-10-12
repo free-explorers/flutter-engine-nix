@@ -57,7 +57,7 @@ jobs:
             cores = 4
             experimental-features = nix-command flakes
 
-      - name: Resolve and commit the engine pin
+      - name: Resolve, probe and commit the engine pin
         env:
           FLUTTER_VERSION: ${{ inputs.flutter_version }}
         shell: bash
@@ -67,7 +67,10 @@ jobs:
             echo "no version supplied; building the repository default" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          nix shell nixpkgs#nix-prefetch-git -c python3 scripts/resolve-version.py "$FLUTTER_VERSION"
+          # No nix-prefetch-git: the two tree hashes cannot be prefetched, so the
+          # resolver seeds them with lib.fakeHash and reads them back out of a
+          # real build. Nix, nix-build and nix-prefetch-url come from the runner.
+          python3 scripts/resolve-version.py "$FLUTTER_VERSION"
           if git diff --quiet engine-source.json bootstrap-dart.json; then
             echo "pin for $FLUTTER_VERSION already committed" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
