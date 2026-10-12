@@ -10,6 +10,8 @@
   autoPatchelfHook,
   patchelf,
   flutterVersion,
+  runtimeMode ? "release",
+  isOptimized ? runtimeMode != "debug",
 }:
 let
   pin =
@@ -18,6 +20,7 @@ let
   bootstrapPin = (lib.importJSON ./bootstrap-dart.json).${flutterVersion};
   enginePath = path + "/pkgs/development/compilers/flutter/engine";
   system = stdenv.hostPlatform.system;
+  outName = "host_${runtimeMode}${lib.optionalString (!isOptimized) "_unopt"}";
   sourceHash = pin.sourceHashes.${system}.${system};
   # Bootstrap only: exported Dart is built from the engine's Dart sources.
   bootstrapDart = dart-bin.overrideAttrs (old: {
@@ -70,8 +73,7 @@ let
           fetchSubmodules = pin.swiftshaderFetchSubmodules;
         }
       );
-    runtimeMode = "release";
-    isOptimized = true;
+    inherit runtimeMode isOptimized;
     patches = [ ];
   };
 in
@@ -95,10 +97,10 @@ engine.overrideAttrs (old: {
       old.postUnpack;
   buildPhase =
     lib.replaceStrings
-      [ "ninja -C $out/out/host_release -j$NIX_BUILD_CORES" ]
+      [ "ninja -C $out/out/${outName} -j$NIX_BUILD_CORES" ]
       [
         (
-          "ninja -C $out/out/host_release -j$NIX_BUILD_CORES "
+          "ninja -C $out/out/${outName} -j$NIX_BUILD_CORES "
           + lib.concatStringsSep " " [
             "flutter/shell/platform/embedder:flutter_engine"
             "flutter/build/dart:dart_sdk"
@@ -116,24 +118,24 @@ engine.overrideAttrs (old: {
       old.buildPhase;
   postInstall = (old.postInstall or "") + ''
     install -Dm644 src/flutter/shell/platform/embedder/embedder.h \
-      "$out/out/host_release/flutter_embedder.h"
-    test -s "$out/out/host_release/flutter_patched_sdk/platform_strong.dill"
-    ln -s flutter_patched_sdk "$out/out/host_release/flutter_patched_sdk_product"
-    test -s "$out/out/host_release/libflutter_engine.so"
-    test -x "$out/out/host_release/gen_snapshot"
-    test -s "$out/out/host_release/dart-sdk/bin/snapshots/frontend_server_aot.dart.snapshot"
+      "$out/out/${outName}/flutter_embedder.h"
+    test -s "$out/out/${outName}/flutter_patched_sdk/platform_strong.dill"
+    ln -s flutter_patched_sdk "$out/out/${outName}/flutter_patched_sdk_product"
+    test -s "$out/out/${outName}/libflutter_engine.so"
+    test -x "$out/out/${outName}/gen_snapshot"
+    test -s "$out/out/${outName}/dart-sdk/bin/snapshots/frontend_server_aot.dart.snapshot"
   '';
   postFixup = (old.postFixup or "") + ''
     autoPatchelf -- "$out"
     for binary in gen_snapshot dart-sdk/bin/dart dart-sdk/bin/dartaotruntime; do
-      test "$(${lib.getExe patchelf} --print-interpreter "$out/out/host_release/$binary")" \
+      test "$(${lib.getExe patchelf} --print-interpreter "$out/out/${outName}/$binary")" \
         = ${lib.escapeShellArg stdenv.cc.bintools.dynamicLinker}
     done
-    "$out/out/host_release/dart-sdk/bin/dart" --version 2>&1 | grep -F "${pin.dartVersion}"
-    "$out/out/host_release/gen_snapshot" --version 2>&1 | grep -F "${pin.dartVersion}"
+    "$out/out/${outName}/dart-sdk/bin/dart" --version 2>&1 | grep -F "${pin.dartVersion}"
+    "$out/out/${outName}/gen_snapshot" --version 2>&1 | grep -F "${pin.dartVersion}"
   '';
   passthru = (old.passthru or { }) // {
-    inherit flutterVersion sourceHash;
+    inherit flutterVersion sourceHash runtimeMode outName;
     inherit (pin) engineVersion sourceRev;
   };
 })
