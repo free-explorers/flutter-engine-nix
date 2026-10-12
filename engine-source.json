@@ -13,5 +13,20 @@
     "swiftshaderRev": "794b0cfce1d828d187637e6d932bae484fbe0976",
     "swiftshaderHash": "sha256-4HTzeSCzln8DQh36A8FeWoY7GuS2MsIYrF6sejqPz6k=",
     "swiftshaderFetchSubmodules": false
+  },
+  "3.47.7": {
+    "engineVersion": "deb287481e3ce9468f3434937ced4240a70539ca",
+    "sourceRev": "abaf9c523780a608bd46686fd5e53740a07077f8",
+    "sourceUrl": "https://flutter.googlesource.com/mirrors/flutter",
+    "sourceHashes": {
+      "x86_64-linux": {
+        "x86_64-linux": "sha256-dNtmwYnSaU51BcjkGbK8i5Bo7E+2Hqvc/LatCrXTImM="
+      }
+    },
+    "dartVersion": "3.13.5",
+    "dartSourceRev": "04bcd1036cdc799ac6564988f159ee454d42c822",
+    "swiftshaderRev": "794b0cfce1d828d187637e6d932bae484fbe0976",
+    "swiftshaderHash": "sha256-APNLYt2cHrtEqyEk4kmzFg4Wib66ok3ZwgPuqvueFhU=",
+    "swiftshaderFetchSubmodules": false
   }
 }
