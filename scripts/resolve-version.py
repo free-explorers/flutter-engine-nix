@@ -108,10 +108,13 @@ def to_sri(base32: str) -> str:
 
 
 def prefetch_git(url: str, rev: str) -> str:
+    # nix-prefetch-git has no --hash-format option: it prints the SRI hash in
+    # "hash" and the base32 one in "sha256", so to_sri covers older outputs.
     try:
-        data = json.loads(run("nix-prefetch-git", "--url", url, "--rev", rev, "--hash-format", "sri"))
-    except subprocess.CalledProcessError:
-        fail("nix-prefetch-git failed; run inside `nix shell nixpkgs#nix-prefetch-git`")
+        data = json.loads(run("nix-prefetch-git", "--url", url, "--rev", rev))
+    except subprocess.CalledProcessError as error:
+        detail = (error.stderr or "").strip()
+        fail(f"nix-prefetch-git failed for {url}@{rev}:\n{detail[-1500:]}")
     if data.get("hash"):
         return data["hash"]
     return to_sri(data["sha256"])
