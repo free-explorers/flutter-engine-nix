@@ -74,8 +74,10 @@ does not start the Flutter engine, render a frame, or exercise a real applicatio
 `.github/workflows/release.yml` is **workflow_dispatch only**, restricted to
 `free-explorers/flutter-engine-nix` at `refs/heads/main`. Given a
 `flutter_version` it resolves the pin itself (`scripts/resolve-version.py`:
-the tag commit, `bin/internal/engine.version`, the `DEPS` revisions, and the
-fetched hashes), commits it, and builds — so the repository is a client of a
+the tag commit, `bin/internal/engine.version`, the `DEPS` revisions, and — for
+the two tree hashes no prefetch tool can predict — a probe build that seeds
+`lib.fakeHash` and reads the real value back), commits it, and builds — so the
+repository is a client of a
 Flutter bump rather than a gate in front of it. It uses a standard
 `ubuntu-24.04` runner, one build/four compilation jobs, a 240-minute engine
 timeout, serial LTO links and a 2 GiB disk reserve. It requires the synthetic AOT

@@ -16,13 +16,22 @@ Derived without a build:
 
 Fetched and hashed here (Nix must know them up front):
 
-  sourceHashes    nix-prefetch-git of sourceUrl@sourceRev
-  swiftshaderHash nix-prefetch-git of the SwiftShader pin
-  bootstrap hash  the Dart SDK zip for dartVersion
+  bootstrap hash  the Dart SDK zip for dartVersion; dart-bin fetches it flat
+
+Probed with a real build, because no prefetch tool can predict them:
+
+  sourceHashes    nixpkgs fetches the engine source with `gclient sync`
+                  (depot_tools plus the DEPS submodules), not a plain git fetch
+  swiftshaderHash the SwiftShader fetch deletes third_party/llvm-project in its
+                  postFetch, so the hash covers the pruned tree
+
+Those two are seeded with lib.fakeHash, built, and read back out of the hash
+mismatch -- the same probe the application uses for its own Nix pins. The build
+is the only authority for a fixed-output hash.
 
 Usage: scripts/resolve-version.py VERSION [--check]
 Writes the entries into engine-source.json and bootstrap-dart.json next to this
-repository root. --check verifies the existing entries match without writing.
+repository root. --check verifies the fields derivable without a build.
 """
 from __future__ import annotations
 
@@ -37,9 +46,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_URL = "https://flutter.googlesource.com/mirrors/flutter"
-SWIFTSHADER_URL = "https://swiftshader.googlesource.com/SwiftShader"
 FLUTTER_REPO = "https://github.com/flutter/flutter"
 DART_ZIP = "https://storage.googleapis.com/dart-archive/channels/stable/release/{version}/sdk/dartsdk-linux-x64-release.zip"
+# lib.fakeHash: the probe seeds this and reads the real value out of the mismatch.
+FAKE = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 
 
 def fail(message: str) -> "NoReturn":  # noqa: F821
@@ -107,17 +117,65 @@ def to_sri(base32: str) -> str:
     fail(f"could not convert {base32} to SRI; update the Nix hash command")
 
 
-def prefetch_git(url: str, rev: str) -> str:
-    # nix-prefetch-git has no --hash-format option: it prints the SRI hash in
-    # "hash" and the base32 one in "sha256", so to_sri covers older outputs.
-    try:
-        data = json.loads(run("nix-prefetch-git", "--url", url, "--rev", rev))
-    except subprocess.CalledProcessError as error:
-        detail = (error.stderr or "").strip()
-        fail(f"nix-prefetch-git failed for {url}@{rev}:\n{detail[-1500:]}")
-    if data.get("hash"):
-        return data["hash"]
-    return to_sri(data["sha256"])
+def load_document(name: str) -> dict:
+    path = ROOT / name
+    return json.loads(path.read_text()) if path.is_file() else {}
+
+
+def write_document(name: str, document: dict) -> None:
+    (ROOT / name).write_text(
+        json.dumps(dict(sorted(document.items())), indent=2, ensure_ascii=False) + "\n"
+    )
+
+
+def dig(document: dict, path: list[str]):
+    for key in path:
+        document = document[key]
+    return document
+
+
+def plant(document: dict, path: list[str], value: str) -> None:
+    for key in path[:-1]:
+        document = document.setdefault(key, {})
+    document[path[-1]] = value
+
+
+def nix_build_engine(version: str) -> subprocess.CompletedProcess:
+    # With a fake fixed-output hash this fails at the offending derivation and
+    # prints the real hash.
+    return subprocess.run(
+        ["nix-build", "default.nix", "--argstr", "flutterVersion", version,
+         "-A", "engine", "--no-out-link", "--max-jobs", "1", "--cores", "4"],
+        cwd=ROOT, capture_output=True, text=True,
+    )
+
+
+def mismatched_hash(result: subprocess.CompletedProcess, matcher: str | None) -> str | None:
+    for block in re.finditer(
+        r"hash mismatch in fixed-output derivation '([^']+)':(.{0,600}?)got:\s+(sha256-[A-Za-z0-9+/=]+)",
+        (result.stderr or "") + (result.stdout or ""),
+        re.S,
+    ):
+        if matcher is None or matcher in block.group(1):
+            return block.group(3)
+    return None
+
+
+def probe(version: str, label: str, filename: str, path: list[str], matcher: str | None) -> None:
+    for _ in range(3):
+        document = load_document(filename)
+        if dig(document, [version] + path) != FAKE:
+            print(f"  {label}: resolved")
+            return
+        result = nix_build_engine(version)
+        value = mismatched_hash(result, matcher)
+        if value is None:
+            output = ((result.stderr or "") + (result.stdout or ""))[-2000:]
+            fail(f"{label}: the build reported no usable hash mismatch\n{output}")
+        plant(document, [version] + path, value)
+        write_document(filename, document)
+        print(f"  {label}: {value}")
+    fail(f"{label}: still unresolved after 3 attempts")
 
 
 def prefetch_url(url: str) -> str:
@@ -134,24 +192,25 @@ def main() -> int:
 
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         fail(f"version must be x.y.z, got {version!r}")
-    for tool in ("git", "nix", "nix-prefetch-git", "nix-prefetch-url"):
+    for tool in ("git", "nix", "nix-build", "nix-prefetch-url"):
         if shutil.which(tool) is None:
-            fail(f"missing {tool} (run inside `nix shell nixpkgs#nix-prefetch-git`?)")
+            fail(f"missing {tool}")
 
     source_rev = tag_rev(version)
     engine_version = engine_revision(version)
     dart_rev, swiftshader_rev = deps_revisions(engine_version)
     dart_ver = dart_version(version)
 
+    # The two probed hashes start fake; probe() fills them from a real build.
     entry = {
         "engineVersion": engine_version,
         "sourceRev": source_rev,
         "sourceUrl": SOURCE_URL,
-        "sourceHashes": {"x86_64-linux": {"x86_64-linux": prefetch_git(SOURCE_URL, source_rev)}},
+        "sourceHashes": {"x86_64-linux": {"x86_64-linux": FAKE}},
         "dartVersion": dart_ver,
         "dartSourceRev": dart_rev,
         "swiftshaderRev": swiftshader_rev,
-        "swiftshaderHash": prefetch_git(SWIFTSHADER_URL, swiftshader_rev),
+        "swiftshaderHash": FAKE,
         "swiftshaderFetchSubmodules": False,
     }
     bootstrap = {
@@ -161,19 +220,31 @@ def main() -> int:
     }
 
     if args.check:
-        source = json.loads((ROOT / "engine-source.json").read_text())
-        boot = json.loads((ROOT / "bootstrap-dart.json").read_text())
-        if source.get(version) != entry or boot.get(version) != bootstrap:
-            fail(f"{version}: resolved pin differs from the committed one")
-        print(f"{version}: committed pin matches")
+        source = load_document("engine-source.json").get(version, {})
+        boot = load_document("bootstrap-dart.json").get(version, {})
+        derived = {k: v for k, v in entry.items() if k not in ("sourceHashes", "swiftshaderHash")}
+        if {k: source.get(k) for k in derived} != derived:
+            fail(f"{version}: derived fields differ from the committed pin")
+        if boot != bootstrap:
+            fail(f"{version}: bootstrap pin differs from the committed one")
+        print(f"{version}: derived fields and bootstrap pin match (probed hashes not checked)")
         return 0
 
-    for name, key, value in (("engine-source.json", version, entry), ("bootstrap-dart.json", version, bootstrap)):
-        path = ROOT / name
-        data = json.loads(path.read_text()) if path.is_file() else {}
-        data[key] = value
-        path.write_text(json.dumps(dict(sorted(data.items())), indent=2, ensure_ascii=False) + "\n")
-        print(f"wrote {name}: {version}")
+    document = load_document("engine-source.json")
+    document[version] = entry
+    write_document("engine-source.json", document)
+    print(f"wrote engine-source.json: {version}")
+
+    boot_document = load_document("bootstrap-dart.json")
+    boot_document[version] = bootstrap
+    write_document("bootstrap-dart.json", boot_document)
+    print(f"wrote bootstrap-dart.json: {version}")
+
+    print("probing the engine's fixed-output hashes")
+    probe(version, "sourceHashes", "engine-source.json",
+          ["sourceHashes", "x86_64-linux", "x86_64-linux"], "-source-")
+    # Only swiftshaderHash is still fake, so any mismatch now is that one.
+    probe(version, "swiftshaderHash", "engine-source.json", ["swiftshaderHash"], None)
     return 0
 
 
