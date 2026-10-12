@@ -116,6 +116,8 @@ jobs:
 
       - name: Notify Veshell that the build finished
         if: always()
+        # A missing or unsuccessful dispatch must not fail a build that worked.
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.VESHELL_DISPATCH_TOKEN }}
         run: |
