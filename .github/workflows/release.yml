@@ -113,3 +113,11 @@ jobs:
         run: |
           free -h
           df -h / /mnt
+
+      - name: Notify Veshell that the build finished
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.VESHELL_DISPATCH_TOKEN }}
+        run: |
+          gh api repos/free-explorers/veshell/dispatches -f event_type=flutter-bump >/dev/null
+          echo "dispatched flutter-bump to free-explorers/veshell"
