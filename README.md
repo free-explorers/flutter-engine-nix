@@ -2,8 +2,8 @@
 
 Independent, pinned Nix source build of the Flutter release engine for **native
 x86_64-linux only**. No cross compilation or other platform support is claimed.
-The standalone Flutter version default lives only in `default.json`; callers
-can explicitly select a supported `flutterVersion` from `engine-source.json`.
+Callers must pass a supported `flutterVersion` from `engine-source.json`;
+there is no repository default.
 `bootstrap-dart.json` pins only the matching bootstrap Dart download and versions,
 not Flutter SDK tooling or prebuilt engine artifacts. The exported Dart SDK is
 built from the pinned engine's Dart sources.

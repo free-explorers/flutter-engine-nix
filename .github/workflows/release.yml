@@ -10,9 +10,8 @@ on:
   workflow_dispatch:
     inputs:
       flutter_version:
-        description: Flutter release to resolve and build; empty uses the repository default
-        required: false
-        default: ""
+        description: Flutter release to resolve and build; must match the consumer pin
+        required: true
         type: string
 
 permissions:
@@ -30,8 +29,8 @@ jobs:
     permissions:
       contents: write
     env:
-      # Empty means "build the repository default in default.json"; otherwise
-      # every build below honours the version this run was asked for.
+      # Required: there is no repository default. An empty value is rejected so
+      # the published engine always matches the requested consumer pin.
       FLUTTER_VERSION: ${{ inputs.flutter_version }}
     steps:
       - name: Checkout trusted source
@@ -64,8 +63,8 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "$FLUTTER_VERSION" ]]; then
-            echo "no version supplied; building the repository default" | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 0
+            echo "::error::flutter_version is required; refusing to publish without it"
+            exit 1
           fi
           # No nix-prefetch-git: the two tree hashes cannot be prefetched, so the
           # resolver seeds them with lib.fakeHash and reads them back out of a
