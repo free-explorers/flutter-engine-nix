@@ -5,10 +5,10 @@
   isOptimized ? runtimeMode != "debug",
 }:
 let
-  nixpkgsRevision = "774debe7a0d1b496e35677ad955a1011c6ff74f3";
+  nixpkgsRevision = "26f4107e47e3ad0ffd0db220469ba83b6f6d96e8";
   nixpkgs = builtins.fetchTarball {
     url = "https://github.com/NixOS/nixpkgs/archive/${nixpkgsRevision}.tar.gz";
-    sha256 = "1japvhk1jlgc8sihm9gczwnv6fjanqsr1ji57vx67wbvqj88a34x";
+    sha256 = "sha256-OaQwAtPMTjQiY2sT/2/62UbSPhzP/0aDnWzMm/NCiUw=";
   };
   pkgs = import nixpkgs { inherit system; };
   engine = pkgs.callPackage ./engine.nix { inherit flutterVersion runtimeMode isOptimized; };
