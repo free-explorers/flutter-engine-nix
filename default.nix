@@ -1,5 +1,5 @@
 {
-  flutterVersion ? (builtins.fromJSON (builtins.readFile ./default.json)).flutterVersion,
+  flutterVersion,
   system ? builtins.currentSystem,
   runtimeMode ? "release",
   isOptimized ? runtimeMode != "debug",

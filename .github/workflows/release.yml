@@ -29,9 +29,8 @@ jobs:
     permissions:
       contents: write
     env:
-      # Required: an empty value used to fall back to default.json, which can
-      # publish a different engine than the consumer pins. Every build below
-      # honours the version this run was asked for.
+      # Required: there is no repository default. An empty value is rejected so
+      # the published engine always matches the requested consumer pin.
       FLUTTER_VERSION: ${{ inputs.flutter_version }}
     steps:
       - name: Checkout trusted source
@@ -64,7 +63,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "$FLUTTER_VERSION" ]]; then
-            echo "::error::flutter_version is required; refusing to publish the repository default"
+            echo "::error::flutter_version is required; refusing to publish without it"
             exit 1
           fi
           # No nix-prefetch-git: the two tree hashes cannot be prefetched, so the
