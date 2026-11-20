@@ -3,12 +3,17 @@
 set -euo pipefail
 engine=${1:?Expected standalone engine output}
 output="$engine/out/host_release"
-for artifact in \
-  libflutter_engine.so flutter_embedder.h gen_snapshot dart-sdk/bin/dart \
-  dart-sdk/bin/dartaotruntime dart-sdk/bin/snapshots/frontend_server_aot.dart.snapshot \
-  flutter_patched_sdk/platform_strong.dill flutter_patched_sdk_product/platform_strong.dill \
-  icudtl.dat libflutter_linux_gtk.so gen/const_finder.dart.snapshot \
-  impellerc font-subset; do
+artifacts=(
+  libflutter_engine.so flutter_embedder.h gen_snapshot dart-sdk/bin/dart
+  dart-sdk/bin/dartaotruntime dart-sdk/bin/snapshots/frontend_server_aot.dart.snapshot
+  flutter_patched_sdk/platform_strong.dill flutter_patched_sdk_product/platform_strong.dill
+  icudtl.dat libflutter_linux_gtk.so impellerc font-subset
+)
+# const_finder was removed from the engine in Flutter 3.50.
+if [[ $(printf '%s\n' "${FLUTTER_VERSION:?}" 3.50 | sort -V | head -1) != 3.50 ]]; then
+  artifacts+=(gen/const_finder.dart.snapshot)
+fi
+for artifact in "${artifacts[@]}"; do
   echo "Checking artifact: $output/$artifact"
   test -s "$output/$artifact" || { ls -la "$output"; exit 1; }
 done

@@ -133,18 +133,21 @@ engine.overrideAttrs (old: {
       [
         (
           "ninja -C $out/out/${outName} -j$NIX_BUILD_CORES "
-          + lib.concatStringsSep " " [
-            "flutter/shell/platform/embedder:flutter_engine"
-            "flutter/build/dart:dart_sdk"
-            "flutter/flutter_frontend_server:frontend_server"
-            "flutter/lib/snapshot:generate_snapshot_bins"
-            "flutter/shell/platform/linux:flutter_linux_gtk"
-            "flutter/shell/platform/linux:publish_headers_linux"
-            "flutter/sky/packages:packages"
-            "flutter/impeller/compiler:impellerc"
-            "flutter/tools/font_subset:_font-subset"
-            "flutter/tools/const_finder:const_finder"
-          ]
+          + lib.concatStringsSep " " (
+            [
+              "flutter/shell/platform/embedder:flutter_engine"
+              "flutter/build/dart:dart_sdk"
+              "flutter/flutter_frontend_server:frontend_server"
+              "flutter/lib/snapshot:generate_snapshot_bins"
+              "flutter/shell/platform/linux:flutter_linux_gtk"
+              "flutter/shell/platform/linux:publish_headers_linux"
+              "flutter/sky/packages:packages"
+              "flutter/impeller/compiler:impellerc"
+              "flutter/tools/font_subset:_font-subset"
+            ]
+            # Removed from the engine in Flutter 3.50 (record_use replaces it).
+            ++ lib.optional (lib.versionOlder flutterVersion "3.50") "flutter/tools/const_finder:const_finder"
+          )
         )
       ]
       old.buildPhase;
