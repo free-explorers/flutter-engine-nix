@@ -12,6 +12,7 @@ Derived without a build:
   engineVersion   bin/internal/engine.version at that tag
   dartSourceRev   DEPS dart_revision at the engine revision
   swiftshaderRev  DEPS SwiftShader pin
+  swiftshaderUrl  DEPS SwiftShader repository
   dartVersion     the release's dart_sdk_version
 
 Fetched and hashed here (Nix must know them up front):
@@ -83,19 +84,39 @@ def engine_revision(version: str) -> str:
     return value
 
 
-def deps_revisions(revision: str) -> tuple[str, str]:
+def deps_revisions(revision: str) -> tuple[str, str, str]:
     deps = fetch(f"https://raw.githubusercontent.com/flutter/flutter/{revision}/DEPS")
     dart = re.search(r"'dart_revision':\s*'([0-9a-f]{40})'", deps)
-    # The repository is SwiftShader.git up to Flutter 3.47, swiftshader.git
-    # (under third_party/) from 3.50.
+    # Up to Flutter 3.47 the pin is upstream's SwiftShader.git; from 3.50 it is
+    # Flutter's mirror, Var('flutter_git') + '/third_party/swiftshader.git',
+    # whose revisions upstream does not have.
     swiftshader = re.search(
-        r"swiftshader\.git'?\s*\+\s*'@'\s*\+\s*'([0-9a-f]{40})'", deps, re.IGNORECASE
+        r"((?:Var\('\w+'\)\s*\+\s*)?'[^']*swiftshader\.git)'?\s*\+\s*'@'\s*\+\s*'([0-9a-f]{40})'",
+        deps,
+        re.IGNORECASE,
     )
     if not dart:
         fail(f"no dart_revision in DEPS at {revision}")
     if not swiftshader:
         fail(f"no SwiftShader pin in DEPS at {revision}")
-    return dart.group(1), swiftshader.group(1)
+    return dart.group(1), swiftshader.group(2), deps_url(deps, swiftshader.group(1))
+
+
+def deps_url(deps: str, expression: str) -> str:
+    """The URL a DEPS string expression such as Var('x') + '/path' names."""
+    url = ""
+    for part in re.split(r"\s*\+\s*", expression):
+        var = re.fullmatch(r"Var\('(\w+)'\)", part)
+        if var:
+            value = re.search(rf"'{var.group(1)}':\s*'([^']*)'", deps)
+            if not value:
+                fail(f"no {var.group(1)} in DEPS")
+            url += value.group(1)
+        else:
+            url += part.strip("'")
+    if not url.startswith("https://"):
+        fail(f"unexpected SwiftShader repository in DEPS: {url!r}")
+    return url
 
 
 def dart_version(version: str) -> str:
@@ -221,7 +242,7 @@ def main() -> int:
 
     source_rev = tag_rev(version)
     engine_version = engine_revision(version)
-    dart_rev, swiftshader_rev = deps_revisions(engine_version)
+    dart_rev, swiftshader_rev, swiftshader_url = deps_revisions(engine_version)
     dart_ver = dart_version(version)
 
     # The two probed hashes start fake; probe_hashes() fills them from a real build.
@@ -233,6 +254,7 @@ def main() -> int:
         "dartVersion": dart_ver,
         "dartSourceRev": dart_rev,
         "swiftshaderRev": swiftshader_rev,
+        "swiftshaderUrl": swiftshader_url,
         "swiftshaderHash": FAKE,
         "swiftshaderFetchSubmodules": False,
     }
