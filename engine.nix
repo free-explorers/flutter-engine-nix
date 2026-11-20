@@ -6,6 +6,8 @@
   path,
   stdenv,
   fetchgit,
+  fetchurl,
+  runCommand,
   dart-bin,
   autoPatchelfHook,
   patchelf,
@@ -18,6 +20,31 @@ let
     (lib.importJSON ./engine-source.json).${flutterVersion}
       or (throw "No source engine metadata for Flutter ${flutterVersion}.");
   bootstrapPin = (lib.importJSON ./bootstrap-dart.json).${flutterVersion};
+  # Veshell's engine patches, shared with the prebuilt engines of
+  # free-explorers/flutter-engine (scripts/pin-patches.py). They are written
+  # from the Flutter monorepo's root, and nixpkgs applies patches from the
+  # engine's own (src/flutter) with -p1: strip the engine/src/flutter prefix.
+  patchesPin = lib.importJSON ./engine-patches.json;
+  enginePatches = map (
+    patch:
+    runCommand patch.name
+      {
+        src = fetchurl {
+          url = "https://raw.githubusercontent.com/${patchesPin.repository}/${patchesPin.revision}/patches/${patch.name}";
+          inherit (patch) hash;
+        };
+      }
+      ''
+        sed -E \
+          -e 's#^(diff --git a/)engine/src/flutter/(.*) b/engine/src/flutter/#\1\2 b/#' \
+          -e 's#^(--- a/|\+\+\+ b/)engine/src/flutter/#\1#' \
+          "$src" > "$out"
+        if grep -E '^(diff --git|--- a/|\+\+\+ b/)' "$out" | grep -q 'engine/src/'; then
+          echo "${patch.name} changes files outside engine/src/flutter" >&2
+          exit 1
+        fi
+      ''
+  ) patchesPin.patches;
   enginePath = path + "/pkgs/development/compilers/flutter/engine";
   system = stdenv.hostPlatform.system;
   outName = "host_${runtimeMode}${lib.optionalString (!isOptimized) "_unopt"}";
@@ -74,7 +101,7 @@ let
         }
       );
     inherit runtimeMode isOptimized;
-    patches = [ ];
+    patches = enginePatches;
   };
 in
 assert lib.assertMsg (
@@ -137,5 +164,6 @@ engine.overrideAttrs (old: {
   passthru = (old.passthru or { }) // {
     inherit flutterVersion sourceHash runtimeMode outName;
     inherit (pin) engineVersion sourceRev;
+    inherit (patchesPin) patchset;
   };
 })
