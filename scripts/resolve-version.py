@@ -86,7 +86,11 @@ def engine_revision(version: str) -> str:
 def deps_revisions(revision: str) -> tuple[str, str]:
     deps = fetch(f"https://raw.githubusercontent.com/flutter/flutter/{revision}/DEPS")
     dart = re.search(r"'dart_revision':\s*'([0-9a-f]{40})'", deps)
-    swiftshader = re.search(r"SwiftShader\.git'?\s*\+\s*'@'\s*\+\s*'([0-9a-f]{40})'", deps)
+    # The repository is SwiftShader.git up to Flutter 3.47, swiftshader.git
+    # (under third_party/) from 3.50.
+    swiftshader = re.search(
+        r"swiftshader\.git'?\s*\+\s*'@'\s*\+\s*'([0-9a-f]{40})'", deps, re.IGNORECASE
+    )
     if not dart:
         fail(f"no dart_revision in DEPS at {revision}")
     if not swiftshader:
