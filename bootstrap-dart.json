@@ -12,5 +12,12 @@
     "hashes": {
       "x86_64-linux": "sha256-6oZLxk3zCmuL3zCy4yVQ93F9mokN6PQCk66ruST+Iys="
     }
+  },
+  "3.50.1": {
+    "engineVersion": "4d35714800b9266b6693a58e1225ecd7e9e45ed7",
+    "dartVersion": "3.14.0",
+    "hashes": {
+      "x86_64-linux": "sha256-kPf9df4h4WQ3d434gvKAkQ2bvUgJyQAk8h3oJDXd7R0="
+    }
   }
 }
