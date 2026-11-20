@@ -92,12 +92,17 @@ let
       else
         sourceHash;
     inherit (pin) swiftshaderRev swiftshaderHash;
+    # nixpkgs fetches SwiftShader only, from upstream's repository; from
+    # Flutter 3.50 DEPS pins a revision of Flutter's mirror instead.
     fetchgit =
       args:
       fetchgit (
         args
         // {
           fetchSubmodules = pin.swiftshaderFetchSubmodules;
+        }
+        // lib.optionalAttrs (pin ? swiftshaderUrl) {
+          url = pin.swiftshaderUrl;
         }
       );
     inherit runtimeMode isOptimized;
