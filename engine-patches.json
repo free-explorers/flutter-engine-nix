@@ -1,0 +1,11 @@
+{
+  "repository": "free-explorers/flutter-engine",
+  "revision": "fcdc72537b06a0f569fec237ece1a5b614211e4e",
+  "patchset": "veshell.1",
+  "patches": [
+    {
+      "name": "0002-embedder-partial-repaint-with-a-compositor.patch",
+      "hash": "sha256-1etv81GI73ETi9SYc+Rxvcbi4uH7jx+NkG2ZGGtYpmY="
+    }
+  ]
+}

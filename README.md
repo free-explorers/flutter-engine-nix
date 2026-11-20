@@ -8,6 +8,13 @@ there is no repository default.
 not Flutter SDK tooling or prebuilt engine artifacts. The exported Dart SDK is
 built from the pinned engine's Dart sources.
 
+The engine carries Veshell's patches: the files of `patches/` in
+[free-explorers/flutter-engine](https://github.com/free-explorers/flutter-engine),
+which builds the prebuilt engines from the same files. `engine-patches.json`
+pins them by revision and hash (`scripts/pin-patches.py REVISION` rewrites it);
+`engine.passthru.patchset` names them. Patches apply after the source fetch,
+so the source hashes stay upstream's.
+
 ## API
 
 ```nix
