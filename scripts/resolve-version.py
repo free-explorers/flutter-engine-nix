@@ -204,7 +204,12 @@ def probe_hashes(version: str) -> None:
         found = fixed_output_mismatches(result)
         filled = False
         for label, filename, path, matcher in pending:
-            value = next((hash_ for name, hash_ in found if matcher in name), None)
+            # Case-insensitive: the SwiftShader fetch is named after its
+            # repository, SwiftShader.git up to Flutter 3.47, swiftshader.git
+            # (Flutter's mirror) from 3.50.
+            value = next(
+                (hash_ for name, hash_ in found if matcher.lower() in name.lower()), None
+            )
             if value is None:
                 continue
             document = load_document(filename)
