@@ -126,7 +126,15 @@ engine.overrideAttrs (old: {
   NIX_CFLAGS_COMPILE = old.NIX_CFLAGS_COMPILE ++ [ "-Wno-macro-redefined" ];
   postUnpack =
     lib.replaceStrings [ "1111111111111111111111111111111111111111" ] [ pin.engineVersion ]
-      old.postUnpack;
+      old.postUnpack
+    # From Flutter 3.50, dart2js is compiled from a generated entry point in the
+    # build directory, named relative to the source root (org-dartlang-gnroot).
+    # nixpkgs builds out of the source tree, in the store: the name climbs out of
+    # the root, and the compiler, which cannot go above it, looks for
+    # src/nix/store/... instead. Let that path lead to the store.
+    + lib.optionalString (lib.versionAtLeast flutterVersion "3.50") ''
+      ln --symbolic /nix ${old.src.name}/src/nix
+    '';
   buildPhase =
     lib.replaceStrings
       [ "ninja -C $out/out/${outName} -j$NIX_BUILD_CORES" ]
