@@ -134,6 +134,14 @@ engine.overrideAttrs (old: {
     # src/nix/store/... instead. Let that path lead to the store.
     + lib.optionalString (lib.versionAtLeast flutterVersion "3.50") ''
       ln --symbolic /nix ${old.src.name}/src/nix
+    ''
+    # From Flutter 3.50 (its clang roll), Linux links LLVM's unwinder, which
+    # its prebuilt toolchain provides; nixpkgs' clang uses the GCC runtime,
+    # which rejects any other unwinder (--rtlib=libgcc requires
+    # --unwindlib=libgcc). libgcc unwinds as well.
+    + lib.optionalString (lib.versionAtLeast flutterVersion "3.50") ''
+      substituteInPlace ${old.src.name}/src/build/config/compiler/BUILD.gn \
+        --replace-fail '"--unwindlib=libunwind"' '"--unwindlib=libgcc"'
     '';
   buildPhase =
     lib.replaceStrings
