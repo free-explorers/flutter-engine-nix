@@ -1,11 +1,19 @@
 {
   "repository": "free-explorers/flutter-engine",
-  "revision": "fcdc72537b06a0f569fec237ece1a5b614211e4e",
-  "patchset": "veshell.1",
+  "revision": "1d32aa13eedbb261adb15c8b16705630f668fd4e",
+  "patchset": "veshell.2",
   "patches": [
     {
       "name": "0002-embedder-partial-repaint-with-a-compositor.patch",
       "hash": "sha256-1etv81GI73ETi9SYc+Rxvcbi4uH7jx+NkG2ZGGtYpmY="
+    },
+    {
+      "name": "0003-flow-do-not-damage-texture-layers-whose-texture-has-no-new-frame.patch",
+      "hash": "sha256-1xDXbjboFdM1vygXNpbjUAxWnRhTQJkxTpkyg+nRYw0="
+    },
+    {
+      "name": "0004-embedder-damage-only-what-changed-in-an-external-texture-frame.patch",
+      "hash": "sha256-qPLLnT5TYP1KtCW7XKuVIqClF2ZhEaSLP5VQaxD2WEM="
     }
   ]
 }
