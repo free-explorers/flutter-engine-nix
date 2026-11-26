@@ -1,3 +1,5 @@
+# Non-flake entry point. The nixpkgs pin lives in flake.lock: fetching the
+# locked revision by its narHash gives the same store path as the flake input.
 {
   flutterVersion,
   system ? builtins.currentSystem,
@@ -5,24 +7,19 @@
   isOptimized ? runtimeMode != "debug",
 }:
 let
-  nixpkgsRevision = "26f4107e47e3ad0ffd0db220469ba83b6f6d96e8";
+  locked = (builtins.fromJSON (builtins.readFile ./flake.lock)).nodes.nixpkgs.locked;
   nixpkgs = builtins.fetchTarball {
-    url = "https://github.com/NixOS/nixpkgs/archive/${nixpkgsRevision}.tar.gz";
-    sha256 = "sha256-OaQwAtPMTjQiY2sT/2/62UbSPhzP/0aDnWzMm/NCiUw=";
+    url = "https://github.com/${locked.owner}/${locked.repo}/archive/${locked.rev}.tar.gz";
+    sha256 = locked.narHash;
   };
-  pkgs = import nixpkgs { inherit system; };
-  engine = pkgs.callPackage ./engine.nix { inherit flutterVersion runtimeMode isOptimized; };
-  runtime = pkgs.callPackage ./runtime.nix { inherit engine; };
-  aot = pkgs.callPackage ./aot.nix { inherit engine runtime; };
 in
-{
+import ./packages.nix {
+  nixpkgsRevision = locked.rev;
   inherit
+    nixpkgs
+    system
     flutterVersion
-    nixpkgsRevision
-    engine
-    runtime
-    aot
+    runtimeMode
+    isOptimized
     ;
-  rawEngine = engine;
-  dynamicLinker = pkgs.stdenv.cc.bintools.dynamicLinker;
 }

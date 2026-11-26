@@ -28,7 +28,30 @@ in {
 }
 ```
 
-`default.nix` exports `flutterVersion`, `nixpkgsRevision`, and these derivations:
+As a flake input, `lib.engineFor` takes the same arguments (`system` defaults
+to `x86_64-linux`) and returns the same set:
+
+```nix
+{
+  inputs.flutter-engine-nix.url = "github:free-explorers/flutter-engine-nix";
+
+  outputs = { flutter-engine-nix, ... }: {
+    # ...
+    engine = (flutter-engine-nix.lib.engineFor {
+      flutterVersion = projectFlutterVersion;
+    }).engine;
+  };
+}
+```
+
+The nixpkgs pin lives in `flake.lock` only: `default.nix` fetches the locked
+revision by its `narHash`, which gives the same store path as the flake input,
+so both entry points produce the same derivations. `nix flake update` moves the
+pin for both. A consumer that makes the `nixpkgs` input follow its own nixpkgs
+gets different derivations and builds the engine from source, instead of
+substituting it from the cache.
+
+Both export `flutterVersion`, `nixpkgsRevision`, and these derivations:
 
 | Attribute | Contract |
 | --- | --- |
